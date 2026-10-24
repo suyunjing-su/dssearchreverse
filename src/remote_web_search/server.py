@@ -4,9 +4,12 @@ import argparse
 import json
 import logging
 import re
+import secrets
 import sys
 from typing import Annotated
 
+from mcp.server.auth.provider import AccessToken
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -23,14 +26,59 @@ from .upstream import UpstreamClient, UpstreamError
 LOGGER = logging.getLogger(__name__)
 _DOMAIN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 
+
+class StaticTokenVerifier:
+    """Verify one deployment-local bearer token without external OAuth."""
+
+    def __init__(self, expected_token: str) -> None:
+        self._expected_token = expected_token
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if secrets.compare_digest(token, self._expected_token):
+            return AccessToken(token=token, client_id="static-bearer", scopes=[])
+        return None
+
+
 settings = Settings.from_env()
 upstream = UpstreamClient(settings)
 deepseek = DeepSeekCompatibility(upstream)
-mcp = FastMCP("remote-web-search")
+if settings.mcp_auth_token:
+    mcp = FastMCP(
+        "remote-web-search",
+        token_verifier=StaticTokenVerifier(settings.mcp_auth_token),
+        auth=AuthSettings(
+            issuer_url="https://static-token.invalid",
+            resource_server_url=None,
+            validate_token_resource=False,
+        ),
+    )
+else:
+    mcp = FastMCP("remote-web-search")
+
+
+def _authorization_error() -> JSONResponse:
+    return JSONResponse(
+        {"error": "invalid_token", "error_description": "Authentication required"},
+        status_code=401,
+        headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+    )
+
+
+def _require_bearer(request: Request) -> JSONResponse | None:
+    expected = settings.mcp_auth_token
+    if expected is None:
+        return None
+    value = request.headers.get("authorization", "")
+    scheme, _, token = value.partition(" ")
+    if scheme.lower() != "bearer" or not token or not secrets.compare_digest(token, expected):
+        return _authorization_error()
+    return None
 
 
 @mcp.custom_route("/v1/tools/search", methods=["POST"])
 async def deepseek_search_endpoint(request: Request) -> JSONResponse:
+    if auth_error := _require_bearer(request):
+        return auth_error
     try:
         payload = await request.json()
         return JSONResponse(await deepseek.search(payload))
@@ -44,6 +92,8 @@ async def deepseek_search_endpoint(request: Request) -> JSONResponse:
 
 @mcp.custom_route("/v1/tools/fetch", methods=["POST"])
 async def deepseek_fetch_endpoint(request: Request) -> JSONResponse:
+    if auth_error := _require_bearer(request):
+        return auth_error
     try:
         payload = await request.json()
         return JSONResponse(await deepseek.fetch(payload))
@@ -143,6 +193,10 @@ def main(argv: list[str] | None = None) -> None:
 
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
     if args.transport == "streamable-http":
+        if not settings.mcp_auth_token:
+            raise RuntimeError(
+                "MCP_AUTH_TOKEN must be set before starting streamable-http transport"
+            )
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         LOGGER.info("starting Streamable HTTP MCP server on %s:%s", args.host, args.port)

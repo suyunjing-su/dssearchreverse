@@ -85,7 +85,15 @@ uv run remote-web-search --transport stdio
 
 ### Docker Compose 快速部署
 
-先准备部署机上的 `.env`，至少设置 `UPSTREAM_BASE_URL`、`UPSTREAM_API_KEY` 和 `UPSTREAM_MODEL`。`.env` 不会被复制进镜像，而是由 Compose 在运行时注入容器。
+先准备部署机上的 `.env`，至少设置 `UPSTREAM_BASE_URL`、`UPSTREAM_API_KEY`、`UPSTREAM_MODEL` 和一个足够长的随机 `MCP_AUTH_TOKEN`。`.env` 不会被复制进镜像，而是由 Compose 在运行时注入容器。
+
+Streamable HTTP 的 MCP 请求必须携带：
+
+```http
+Authorization: Bearer <MCP_AUTH_TOKEN>
+```
+
+缺少 token 或 token 不正确时，`/mcp`、`/v1/tools/search` 和 `/v1/tools/fetch` 都返回 `401 Unauthorized`。
 
 ```bash
 cp .env.example .env
@@ -151,13 +159,21 @@ python -m remote_web_search.server --transport streamable-http --host 0.0.0.0 --
 uv run remote-web-search --transport streamable-http --host 0.0.0.0 --port 8000
 ```
 
+启动前必须设置 `MCP_AUTH_TOKEN`。客户端访问 MCP 时发送：
+
+```http
+Authorization: Bearer <MCP_AUTH_TOKEN>
+```
+
+缺少或错误的 token 会收到 `401 Unauthorized`。stdio 模式不要求此 token。
+
 MCP endpoint 默认是：
 
 ```text
 http://127.0.0.1:8000/mcp
 ```
 
-远程部署时请在反向代理层添加 TLS、认证、限流和来源控制；本项目本身不提供用户认证。不要把带有 `UPSTREAM_API_KEY` 的进程直接暴露到公网。
+远程部署时请在反向代理层添加 TLS、限流和来源控制；服务自身会要求配置的 Bearer token。不要把带有 `UPSTREAM_API_KEY` 的进程直接暴露到公网。
 
 ## `web_search` 工具
 
@@ -203,6 +219,7 @@ http://127.0.0.1:8000/mcp
 | `MAX_DOMAINS` | `10` | 域名过滤数量上限 |
 | `UPSTREAM_EXTRA_HEADERS_JSON` | `{}` | 额外请求头 JSON 对象 |
 | `UPSTREAM_SYSTEM_PROMPT` | 内置提示词 | 上游 system prompt |
+| `MCP_AUTH_TOKEN` | 空 | Streamable HTTP/兼容 HTTP 接口的 Bearer token；HTTP 模式启动时必填 |
 | `SERVER_HOST` | `127.0.0.1` | HTTP 监听地址 |
 | `SERVER_PORT` | `8000` | HTTP 监听端口 |
 
@@ -220,4 +237,4 @@ uv run pytest
 - 只接受 `http`/`https` 来源 URL；不会执行上游返回内容中的代码。
 - 上游地址完全由部署者配置，未实现任意 URL 代理；生产环境仍应锁定出站网络和 DNS 策略。
 - 错误信息会截断上游响应正文，避免把大段响应写入 MCP 错误。
-- HTTP 模式没有内置认证，公网部署必须由网关负责认证、TLS、限流和审计。
+- HTTP 模式要求配置 `MCP_AUTH_TOKEN`，并校验 `Authorization: Bearer <token>`；stdio 模式不需要该 token。

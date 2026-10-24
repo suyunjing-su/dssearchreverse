@@ -33,6 +33,7 @@ class Settings:
     max_domains: int = 10
     upstream_system_prompt: str = DEFAULT_SYSTEM_PROMPT
     upstream_extra_headers: dict[str, str] = field(default_factory=dict)
+    mcp_auth_token: str | None = None
     server_host: str = "127.0.0.1"
     server_port: int = 8000
 
@@ -65,6 +66,7 @@ class Settings:
                 "UPSTREAM_SYSTEM_PROMPT", defaults.upstream_system_prompt
             ),
             "upstream_extra_headers": _json_headers(),
+            "mcp_auth_token": os.getenv("MCP_AUTH_TOKEN", "").strip() or None,
             "server_host": _env("SERVER_HOST", defaults.server_host),
             "server_port": _int_env("SERVER_PORT", defaults.server_port, minimum=1, maximum=65535),
         }
