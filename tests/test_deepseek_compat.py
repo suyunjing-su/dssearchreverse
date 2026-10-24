@@ -36,7 +36,13 @@ async def test_deepseek_search_endpoint_shape_uses_native_upstream():
                                             "title": "Example",
                                             "url": "https://example.com/a",
                                             "snippet": "Snippet",
-                                            "published_at": "2026-10-24",
+                                            "summary": "Native summary",
+                                            "content": "Native content",
+                                            "site_name": "Example Site",
+                                            "site_icon": "https://example.com/icon.png",
+                                            "date": "2026-10-24T08:30:00+08:00",
+                                            "rerank_score": 0.87,
+                                            "authority": 4,
                                         }
                                     ],
                                 }
@@ -58,22 +64,81 @@ async def test_deepseek_search_endpoint_shape_uses_native_upstream():
     assert response == {
         "results": [
             {
-                "rerank_score": 0.0,
+                "rerank_score": 0.87,
                 "title": "Example",
                 "url": "https://example.com/a",
                 "snippet": "Snippet",
-                "summary": "Snippet",
+                "summary": "Native summary",
                 "content": "",
-                "site_name": "example.com",
-                "site_icon": None,
-                "date": "2026-10-24T00:00:00+00:00",
-                "authority": -1,
+                "site_name": "Example Site",
+                "site_icon": "https://example.com/icon.png",
+                "date": "2026-10-24T00:30:00+00:00",
+                "authority": 4,
             }
         ]
     }
     assert captured["path"] == "/v1/chat/completions"
+    prompt = captured["json"]["messages"][1]["content"]
+    for field in ("rerank_score", "content", "site_icon", "authority", "summary", "site_name", "date"):
+        assert f'"{field}"' in prompt
     assert "tools" not in captured["json"]
     assert "tool_choice" not in captured["json"]
+
+
+@pytest.mark.asyncio
+async def test_deepseek_search_preserves_native_content_when_requested():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "answer": "answer",
+                                    "results": [
+                                        {
+                                            "title": "Example",
+                                            "url": "https://example.com/a",
+                                            "snippet": "Snippet",
+                                            "summary": "Long summary",
+                                            "content": "Full native page content",
+                                            "site_name": "Example Site",
+                                            "site_icon": "https://example.com/icon.png",
+                                            "date": "2026-10-24T08:30:00+08:00",
+                                            "rerank_score": 2.4,
+                                            "authority": 3,
+                                        }
+                                    ],
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    class FailingFetcher:
+        async def fetch(self, *args, **kwargs):
+            raise AssertionError("native content should not trigger a fallback fetch")
+
+    compatibility = DeepSeekCompatibility(
+        UpstreamClient(Settings(upstream_base_url="https://upstream.example", upstream_max_retries=0)),
+        fetcher=FailingFetcher(),
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        response = await compatibility.search(
+            {"query": "q", "count": 1, "need_content": True},
+            http_client=client,
+        )
+
+    result = response["results"][0]
+    assert result["rerank_score"] == 2.4
+    assert result["content"] == "Full native page content"
+    assert result["site_icon"] == "https://example.com/icon.png"
+    assert result["authority"] == 3
+    assert result["summary"] == "Long summary"
 
 
 @pytest.mark.asyncio

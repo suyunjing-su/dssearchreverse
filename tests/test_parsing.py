@@ -49,6 +49,38 @@ def test_parse_sources_when_answer_is_missing():
     response = parse_upstream_content(
         '{"results":[{"title":"source","url":"https://example.com"}]}'
     )
-
     assert response.results[0].title == "source"
     assert response.results[0].url == "https://example.com"
+
+
+def test_parse_preserves_deepseek_result_metadata():
+    response = parse_upstream_content(
+        json.dumps(
+            {
+                "answer": "ok",
+                "results": [
+                    {
+                        "rerank_score": 0.91,
+                        "title": "Native title",
+                        "url": "https://example.com/article",
+                        "snippet": "Snippet",
+                        "summary": "Summary",
+                        "content": "Full content",
+                        "site_name": "Example",
+                        "site_icon": "https://example.com/icon.svg",
+                        "date": "2026-10-24T00:00:00Z",
+                        "authority": 7,
+                    }
+                ],
+            }
+        )
+    )
+
+    result = response.results[0]
+    assert result.rerank_score == 0.91
+    assert result.summary == "Summary"
+    assert result.content == "Full content"
+    assert result.site_name == "Example"
+    assert result.site_icon == "https://example.com/icon.svg"
+    assert result.date == "2026-10-24T00:00:00Z"
+    assert result.authority == 7

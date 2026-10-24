@@ -48,7 +48,7 @@ Search 请求示例：
 }
 ```
 
-Search returns the DeepSeek-compatible `results` array with the documented fields. Values not available from the configured search model use explicit fallback values: `rerank_score` is `0.0`, `authority` is `-1`, `site_icon` is `null`, and `summary` reuses the available snippet. Date-only upstream values are normalized to UTC RFC 3339; unparseable dates become `null`. Set `need_content: true` to fetch each result URL directly from the deployment machine; fetch failures leave that result's `content` empty. These fields match the response shape, but their values are not equivalent to DeepSeek's ranking or authority metadata.
+Search returns the DeepSeek-compatible `results` array with all documented fields. When the configured native search model supplies `rerank_score`, `content`, `site_icon`, `authority`, `summary`, `site_name`, or `date`, those native values are preserved; missing values use explicit fallbacks (`rerank_score` is `0.0`, `authority` is `-1`, `site_icon` is `null`, and `summary` reuses the available snippet). Dates are normalized to UTC RFC 3339; unparseable dates become `null`. Set `need_content: true` to ask the upstream model for full content and locally fetch a result URL only when the upstream result has no content. Fetch failures leave that result's `content` unchanged. This keeps native-model metadata intact while retaining a safe compatibility fallback.
 
 Fetch 请求示例：
 

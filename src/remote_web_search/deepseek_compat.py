@@ -66,21 +66,25 @@ class SearchRequest:
         return cls(query, count, ori_question, localization, need_content)
 
 
-def search_to_deepseek(response: SearchResponse) -> dict[str, list[dict[str, Any]]]:
-    """Adapt the existing search result model to DeepSeek's result contract."""
+def search_to_deepseek(
+    response: SearchResponse,
+    *,
+    need_content: bool = True,
+) -> dict[str, list[dict[str, Any]]]:
+    """Adapt native search results to the complete DeepSeek result contract."""
     return {
         "results": [
             {
-                "rerank_score": 0.0,
+                "rerank_score": item.rerank_score if item.rerank_score is not None else 0.0,
                 "title": item.title,
                 "url": item.url,
                 "snippet": item.snippet,
-                "summary": item.snippet,
-                "content": "",
-                "site_name": _site_name(item.url),
-                "site_icon": None,
-                "date": _rfc3339_date(item.published_at),
-                "authority": -1,
+                "summary": item.summary or item.snippet,
+                "content": item.content if need_content else "",
+                "site_name": item.site_name or _site_name(item.url),
+                "site_icon": item.site_icon,
+                "date": _rfc3339_date(item.date or item.published_at),
+                "authority": item.authority if item.authority is not None else -1,
             }
             for item in response.results
         ]
@@ -164,11 +168,16 @@ class DeepSeekCompatibility:
         response = await self.upstream.search(
             request.query,
             max_results=request.count,
+            need_content=request.need_content,
             http_client=http_client,
         )
-        result = search_to_deepseek(response)
+        result = search_to_deepseek(response, need_content=request.need_content)
         if request.need_content:
             for item in result["results"]:
+                # Keep content supplied by the native model; Fetch is a fallback for
+                # providers that return only metadata when need_content is requested.
+                if item["content"]:
+                    continue
                 try:
                     fetched = await self.fetcher.fetch(item["url"], http_client=http_client)
                 except FetchError:
