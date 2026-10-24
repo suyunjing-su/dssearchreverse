@@ -110,6 +110,7 @@ docker compose down
 
 Compose 配置默认启用只读根文件系统、丢弃 Linux capabilities 和 `no-new-privileges`。公网部署仍应在反向代理层配置 TLS、认证、限流、审计和出站网络策略；Fetch 接口会使用容器所在部署机的网络访问目标网页。
 
+### 使用 requirements.txt 部署
 
 ```bash
 python -m venv .venv
@@ -121,24 +122,6 @@ python -m remote_web_search.server --transport streamable-http --host 0.0.0.0 --
 ```
 
 `requirements.txt` 固定了当前验证通过的运行时依赖版本；开发测试依赖仍由 `pyproject.toml` 的 `test` extra 管理。
-
-### Docker Compose 快速部署
-
-项目提供了 `Dockerfile` 和 `docker-compose.yml`，会以 Streamable HTTP 模式启动服务，并同时提供 MCP、DeepSeek Search 和 Fetch 接口。
-
-```bash
-cp .env.example .env
-# 编辑 .env，至少设置 UPSTREAM_BASE_URL、UPSTREAM_API_KEY、UPSTREAM_MODEL
-docker compose up --build -d
-```
-
-默认服务地址为 `http://127.0.0.1:8000`，MCP endpoint 为 `http://127.0.0.1:8000/mcp`。可以通过 `.env` 中的 `SERVER_PORT` 修改宿主机端口。停止服务：
-
-```bash
-docker compose down
-```
-
-HTTP 模式没有内置认证；公网部署前请在反向代理层配置 TLS、认证、限流和来源控制，并不要把包含 `UPSTREAM_API_KEY` 的服务直接暴露到公网。
 
 ### MCP 客户端配置（stdio）
 
