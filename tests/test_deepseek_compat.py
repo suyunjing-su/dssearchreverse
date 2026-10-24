@@ -2,7 +2,9 @@ import json
 
 import httpx
 import pytest
+from starlette.testclient import TestClient
 
+from remote_web_search import server
 from remote_web_search.config import Settings
 from remote_web_search.deepseek_compat import (
     CompatibilityError,
@@ -64,7 +66,7 @@ async def test_deepseek_search_endpoint_shape_uses_native_upstream():
                 "content": "",
                 "site_name": "example.com",
                 "site_icon": None,
-                "date": "2026-10-24",
+                "date": "2026-10-24T00:00:00+00:00",
                 "authority": -1,
             }
         ]
@@ -104,3 +106,22 @@ def test_deepseek_payload_validation():
         SearchRequest.from_payload({"query": " "})
     with pytest.raises(CompatibilityError, match="username"):
         FetchRequest.from_payload({"url": "https://user:pass@example.com"})
+
+
+def test_deepseek_http_routes_are_mounted(monkeypatch):
+    class FakeCompatibility:
+        async def search(self, payload):
+            return {"results": [{"url": payload["query"]}]}
+
+        async def fetch(self, payload):
+            return {"title": "local", "content": payload["url"]}
+
+    monkeypatch.setattr(server, "deepseek", FakeCompatibility())
+    with TestClient(server.mcp.streamable_http_app()) as client:
+        search = client.post("/v1/tools/search", json={"query": "q"})
+        fetch = client.post("/v1/tools/fetch", json={"url": "https://example.com"})
+
+    assert search.status_code == 200
+    assert search.json() == {"results": [{"url": "q"}]}
+    assert fetch.status_code == 200
+    assert fetch.json() == {"title": "local", "content": "https://example.com"}

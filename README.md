@@ -48,7 +48,7 @@ Search 请求示例：
 }
 ```
 
-Search 返回 `results` 数组，包含 `title`、`url`、`snippet`、`summary`、`content`、`site_name`、`site_icon`、`date` 和 `authority` 等字段。由于本地上游统一结果不提供 DeepSeek 重排分数和权威等级，`rerank_score` 默认是 `0.0`，`authority` 默认是 `-1`。
+Search returns the DeepSeek-compatible `results` array with the documented fields. Values not available from the configured search model use explicit fallback values: `rerank_score` is `0.0`, `authority` is `-1`, `site_icon` is `null`, and `summary` reuses the available snippet. Date-only upstream values are normalized to UTC RFC 3339; unparseable dates become `null`. Set `need_content: true` to fetch each result URL directly from the deployment machine; fetch failures leave that result's `content` empty. These fields match the response shape, but their values are not equivalent to DeepSeek's ranking or authority metadata.
 
 Fetch 请求示例：
 

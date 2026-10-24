@@ -4,6 +4,7 @@ import html
 import ipaddress
 import re
 from dataclasses import dataclass
+from datetime import date, datetime, time, timezone
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlparse
@@ -78,7 +79,7 @@ def search_to_deepseek(response: SearchResponse) -> dict[str, list[dict[str, Any
                 "content": "",
                 "site_name": _site_name(item.url),
                 "site_icon": None,
-                "date": item.published_at,
+                "date": _rfc3339_date(item.published_at),
                 "authority": -1,
             }
             for item in response.results
@@ -214,6 +215,21 @@ def _text(value: str, key: str, *, maximum: int) -> str:
 def _site_name(url: str) -> str | None:
     hostname = urlparse(url).hostname
     return hostname or None
+
+
+def _rfc3339_date(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        if len(value) == 10:
+            parsed_date = date.fromisoformat(value)
+            return datetime.combine(parsed_date, time.min, tzinfo=timezone.utc).isoformat()
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
 
 
 class _MarkdownParser(HTMLParser):
