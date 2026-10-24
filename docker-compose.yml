@@ -2,12 +2,14 @@ services:
   remote-web-search:
     build:
       context: .
-      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8000
     ports:
-      - "8000:8000"
+      - "${SERVER_PORT:-8000}:8000"
     init: true
     read_only: true
     tmpfs:
