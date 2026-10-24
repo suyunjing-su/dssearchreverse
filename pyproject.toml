@@ -1,0 +1,31 @@
+[project]
+name = "remote-web-search-mcp"
+version = "0.1.0"
+description = "MCP web_search server backed by a search-native OpenAI-compatible chat model"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27.0,<1",
+  "mcp>=1.9.0,<2",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+remote-web-search = "remote_web_search.server:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/remote_web_search"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

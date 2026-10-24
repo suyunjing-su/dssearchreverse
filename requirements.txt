@@ -1,0 +1,5 @@
+# Runtime dependencies for remote-web-search-mcp
+# Python 3.10+
+httpx==0.28.1
+mcp==1.30.0
+python-dotenv==1.2.4
