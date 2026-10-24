@@ -83,7 +83,33 @@ uv sync --extra test
 uv run remote-web-search --transport stdio
 ```
 
-### 使用 requirements.txt 部署
+### Docker Compose 快速部署
+
+先准备部署机上的 `.env`，至少设置 `UPSTREAM_BASE_URL`、`UPSTREAM_API_KEY` 和 `UPSTREAM_MODEL`。`.env` 不会被复制进镜像，而是由 Compose 在运行时注入容器。
+
+```bash
+cp .env.example .env
+# 编辑 .env
+
+docker compose up -d --build
+```
+
+服务监听主机的 `8000` 端口：
+
+```text
+http://127.0.0.1:8000/mcp
+http://127.0.0.1:8000/v1/tools/search
+http://127.0.0.1:8000/v1/tools/fetch
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+Compose 配置默认启用只读根文件系统、丢弃 Linux capabilities 和 `no-new-privileges`。公网部署仍应在反向代理层配置 TLS、认证、限流、审计和出站网络策略；Fetch 接口会使用容器所在部署机的网络访问目标网页。
+
 
 ```bash
 python -m venv .venv

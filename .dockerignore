@@ -1,0 +1,13 @@
+# Build/runtime files
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+
+# Local configuration and secrets
+.env
+
+# Packaging/build output
+*.egg-info/
+dist/
+build/
