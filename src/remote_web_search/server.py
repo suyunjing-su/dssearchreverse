@@ -11,6 +11,7 @@ from typing import Annotated
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -54,6 +55,18 @@ if settings.mcp_auth_token:
     )
 else:
     mcp = FastMCP("remote-web-search")
+
+
+def _configure_http_transport(host: str, port: int) -> None:
+    mcp.settings.host = host
+    mcp.settings.port = port
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        # FastMCP creates loopback-only Host allowlisting when instantiated with
+        # its default host. A public bind address is protected by MCP bearer auth
+        # here, so do not reject the reverse proxy's public Host header.
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
 
 
 def _authorization_error() -> JSONResponse:
@@ -197,8 +210,7 @@ def main(argv: list[str] | None = None) -> None:
             raise RuntimeError(
                 "MCP_AUTH_TOKEN must be set before starting streamable-http transport"
             )
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
+        _configure_http_transport(args.host, args.port)
         LOGGER.info("starting Streamable HTTP MCP server on %s:%s", args.host, args.port)
     else:
         LOGGER.info("starting stdio MCP server")

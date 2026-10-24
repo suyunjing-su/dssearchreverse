@@ -182,9 +182,16 @@ def test_deepseek_http_routes_are_mounted(monkeypatch):
             return {"title": "local", "content": payload["url"]}
 
     monkeypatch.setattr(server, "deepseek", FakeCompatibility())
+    headers = {}
+    if server.settings.mcp_auth_token:
+        headers["Authorization"] = f"Bearer {server.settings.mcp_auth_token}"
     with TestClient(server.mcp.streamable_http_app()) as client:
-        search = client.post("/v1/tools/search", json={"query": "q"})
-        fetch = client.post("/v1/tools/fetch", json={"url": "https://example.com"})
+        search = client.post("/v1/tools/search", headers=headers, json={"query": "q"})
+        fetch = client.post(
+            "/v1/tools/fetch",
+            headers=headers,
+            json={"url": "https://example.com"},
+        )
 
     assert search.status_code == 200
     assert search.json() == {"results": [{"url": "q"}]}

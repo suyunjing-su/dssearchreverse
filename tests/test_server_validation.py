@@ -35,9 +35,19 @@ def test_bearer_auth_rejects_missing_and_wrong_token(monkeypatch):
         "settings",
         replace(server.settings, mcp_auth_token="correct-token"),
     )
+
     def request(headers):
         return Request({"type": "http", "headers": headers, "method": "POST", "path": "/mcp"})
 
     assert server._require_bearer(request([])).status_code == 401
     assert server._require_bearer(request([(b"authorization", b"Bearer wrong")])).status_code == 401
     assert server._require_bearer(request([(b"authorization", b"Bearer correct-token")])) is None
+
+
+def test_public_host_disables_loopback_host_allowlist():
+    original = server.mcp.settings.transport_security
+    try:
+        server._configure_http_transport("0.0.0.0", 8000)
+        assert server.mcp.settings.transport_security.enable_dns_rebinding_protection is False
+    finally:
+        server.mcp.settings.transport_security = original
