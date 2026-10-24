@@ -1,6 +1,6 @@
 # Remote Web Search MCP
 
-一个把“上游原生具备 web search 的大模型”包装成 MCP `web_search` 工具的服务器。
+一个把“上游原生具备 web search 的大模型”包装成 MCP `web_search` 工具的服务器，同时提供 DeepSeek Search/Fetch API 兼容 HTTP 接口。
 
 这里的关键点是：服务器向上游发起普通的 Chat Completions 请求，**不携带 `tools`、`tool_choice` 或任何搜索工具定义**。搜索由上游模型自身的原生能力完成，服务器只负责转发查询、约束输出、解析答案和提取来源。
 
@@ -26,6 +26,43 @@ POST {UPSTREAM_BASE_URL}{UPSTREAM_CHAT_PATH}
 ```
 
 上游需要在模型侧默认执行原生搜索。服务器不会替上游补充搜索工具，也不会把搜索结果当成 MCP tool call 发送。
+
+## DeepSeek Search/Fetch 兼容接口
+
+服务器还提供与 DeepSeek Search/Fetch API 相同路径和主要响应结构的本地接口：
+
+```text
+POST /v1/tools/search
+POST /v1/tools/fetch
+```
+
+这两个接口不是把 DeepSeek 当作上游：Search 仍使用配置的原生搜索模型，Fetch 则由部署服务器直接发起 HTTP 请求访问目标网页。
+
+Search 请求示例：
+
+```json
+{
+  "query": "人工智能最新进展",
+  "count": 10,
+  "need_content": false
+}
+```
+
+Search 返回 `results` 数组，包含 `title`、`url`、`snippet`、`summary`、`content`、`site_name`、`site_icon`、`date` 和 `authority` 等字段。由于本地上游统一结果不提供 DeepSeek 重排分数和权威等级，`rerank_score` 默认是 `0.0`，`authority` 默认是 `-1`。
+
+Fetch 请求示例：
+
+```json
+{"url": "https://example.com/article"}
+```
+
+Fetch 返回：
+
+```json
+{"title": "页面标题", "content": "Markdown 正文"}
+```
+
+Fetch 仅允许 HTTP(S) URL，不允许 URL 中包含用户名或密码，并限制目标响应体为 5 MiB。网页 HTML 会提取标题并转换为基础 Markdown；非 HTML 内容会原样作为正文返回。生产环境应在出站防火墙、DNS 策略和响应大小限制之外，再配置网关认证与限流。
 
 ## 快速开始
 

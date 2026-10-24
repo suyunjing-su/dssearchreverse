@@ -8,17 +8,51 @@ import sys
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from .config import Settings
+from .deepseek_compat import (
+    CompatibilityError,
+    DeepSeekCompatibility,
+    FetchError,
+)
 from .parsing import response_to_dict
-from .upstream import UpstreamClient
+from .upstream import UpstreamClient, UpstreamError
 
 LOGGER = logging.getLogger(__name__)
 _DOMAIN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?$")
 
 settings = Settings.from_env()
 upstream = UpstreamClient(settings)
+deepseek = DeepSeekCompatibility(upstream)
 mcp = FastMCP("remote-web-search")
+
+
+@mcp.custom_route("/v1/tools/search", methods=["POST"])
+async def deepseek_search_endpoint(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+        return JSONResponse(await deepseek.search(payload))
+    except CompatibilityError as exc:
+        return JSONResponse({"error": {"message": str(exc)}}, status_code=400)
+    except ValueError as exc:
+        return JSONResponse({"error": {"message": f"invalid JSON: {exc}"}}, status_code=400)
+    except (FetchError, UpstreamError) as exc:
+        return JSONResponse({"error": {"message": str(exc)}}, status_code=502)
+
+
+@mcp.custom_route("/v1/tools/fetch", methods=["POST"])
+async def deepseek_fetch_endpoint(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+        return JSONResponse(await deepseek.fetch(payload))
+    except CompatibilityError as exc:
+        return JSONResponse({"error": {"message": str(exc)}}, status_code=400)
+    except ValueError as exc:
+        return JSONResponse({"error": {"message": f"invalid JSON: {exc}"}}, status_code=400)
+    except (FetchError, UpstreamError) as exc:
+        return JSONResponse({"error": {"message": str(exc)}}, status_code=502)
 
 
 @mcp.tool()
